@@ -1,0 +1,10 @@
+## Interface: 16001
+## Title: PartoutProbe
+## Notes: Throwaway probe for Parse Partout: guild invites, whispers from clicks, addon messages, guild strings, notes. A ForeverProbe module: /fp partout
+## Author: Spotnick
+## Version: dev
+## Dependencies: ForeverProbe
+## OptionalDeps: ParsePartout
+## SavedVariables: PartoutProbeDB
+
+PartoutProbe.lua
