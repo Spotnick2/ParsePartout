@@ -1,0 +1,21 @@
+# Compiled Lua / syntax-check output
+luac.out
+
+# Per-machine Claude Code settings and runtime state
+.claude/settings.local.json
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+
+# Packager output
+.release/
+*.zip
+
+# Python bytecode from Tools/
+__pycache__/
+
+# The embedded LibGlass-1.0: fetched by the packager (.pkgmeta externals),
+# copied from ..\LibGlass by Tools/deploy.ps1. Never commit a copy.
+Libs/
+
+# The CurseForge description: kept beside README.md, pasted into CurseForge by hand.
+README.curseforge.md

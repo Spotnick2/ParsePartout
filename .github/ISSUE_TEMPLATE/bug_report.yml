@@ -1,0 +1,46 @@
+name: Bogue / Bug report
+description: Quelque chose ne marche pas, s'affiche mal ou donne une erreur Lua. / Something doesn't work, looks wrong, or shows a Lua error.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci ! Écrivez en français ou en anglais. / Thanks! Write in French or English.
+  - type: input
+    id: version
+    attributes:
+      label: Version de Parse Partout / Parse Partout version
+      description: "En jeu : `/partout version`. / In game: `/partout version`."
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: Ce qui s'est passé / What happened
+      description: Ce que vous avez fait, ce que vous attendiez, et ce qui s'est passé. / What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Comment le reproduire / How to make it happen again
+      placeholder: |
+        1. /partout
+        2. ...
+  - type: textarea
+    id: error
+    attributes:
+      label: Erreur Lua (s'il y en a) / Lua error (if any)
+      description: "`/console scriptErrors 1`, ou BugSack. Collez l'erreur entière. / Paste the whole error, the stack included."
+      render: text
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Capture d'écran / Screenshot
+      description: Glissez-la ici. / Drag it in here.
+  - type: input
+    id: language
+    attributes:
+      label: Langue du jeu / Game language
+      placeholder: Français, English...

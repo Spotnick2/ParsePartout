@@ -1,0 +1,18 @@
+## Interface: 16001
+## Title: |cffe8b03aParse|r Partout
+## Notes: The Parse Partout guild's addon, for WoW: Forever. /partout
+## Notes-frFR: L'addon de la guilde Parse Partout, pour WoW: Forever. /partout
+## Author: Spotnick
+## IconTexture: Interface\AddOns\ParsePartout\Media\Logo
+## Version: @project-version@
+## X-License: MIT
+## X-Curse-Project-ID: 1787925
+## SavedVariables: ParsePartoutDB
+
+Libs\LibGlass-1.0\LibGlass-1.0.xml
+Compat.lua
+Locale.lua
+Glass.lua
+Window.lua
+Options.lua
+ParsePartout.lua

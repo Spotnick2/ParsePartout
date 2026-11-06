@@ -1,0 +1,11 @@
+name: Idée / Idea
+description: Quelque chose que vous aimeriez que Parse Partout fasse pour la guilde. / Something you'd like Parse Partout to do for the guild.
+labels: ["idea"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: L'idée / The idea
+      description: Ce que vous aimeriez, et à quel moment du jeu vous en auriez besoin. / What you'd like, and the moment in play where you'd want it.
+    validations:
+      required: true
