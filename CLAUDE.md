@@ -87,6 +87,25 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` → `Compat.lua` → `Local
 - `C:\Projects\WoW\wow-ui-source` (branch `forever`): the client's own FrameXML.
 - `..\GuildSpy`: the guild roster, its events and their quirks on Forever, already measured.
 
+## Probes: ForeverProbe
+
+Anything about the client that can be checked in game is measured, not reasoned, with a probe,
+and **a probe is a ForeverProbe module** (`..\ForeverProbe`, private; read
+`C:\Projects\WoW\References\Docs\PROBES.md` and `..\ForeverProbe\docs\GUIDE.md` first). None
+exists yet; the first one is `Tools\PartoutProbe\` (`## Dependencies: ForeverProbe`,
+`ForeverProbe:Module("PartoutProbe", { api = 1, cmd = "partout" })`), and the deploy script then
+gains `-Probe` / `-ProbeOnly` the way `..\GlassMail\Tools\deploy.ps1` has them.
+- Diagnostic output goes to the `/fp` console and the module's saved log, never to chat.
+- When the owner has to do something in game, write a guided procedure (`Probe:Steps`), not a
+  checklist in chat. After their `/reload`, read the SavedVariables yourself (the `probe-reader`
+  agent can), never ask for a paste.
+- Screenshots freely for visual questions; `..\ForeverProbe\Tools\screenshots.ps1` prints their
+  paths and `-Remove` deletes only the recorded ones once the findings are written down.
+- Results, with the build, go in `docs/FOREVER-PROBE.md`; addon-agnostic ones in the porting
+  guide. Check the porting guide and ForeverProbe's facts before measuring again.
+- Probe tests run locally only: ForeverProbe is private, so CI sets `FOREVERPROBE_OPTIONAL=1`
+  and the harness's `loadForeverProbe` skips there (lift it from `..\GlassMail\tests\harness.lua`).
+
 ## Toolchain and commands
 
 Lua 5.1 at `C:\Program Files (x86)\Lua\5.1\` (`lua.exe`, `luac.exe`). No build step.
