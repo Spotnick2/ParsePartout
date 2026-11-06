@@ -26,6 +26,9 @@ if (Test-Path -LiteralPath $libGlass) { Write-LibGlassPinStatus $RepoRoot $libGl
 $kit = Get-WowTestKit -RepoRoot $RepoRoot -KitDev:$KitDev
 
 # The TOC's files are syntax-checked by the kit (the TOC is the list, so a new
-# file cannot go unchecked). The embedded library is checked in its own repo.
-& (Join-Path $kit "scripts\run.ps1") -RepoRoot $RepoRoot -Toc "ParsePartout.toc" -Lua $Lua
+# file cannot go unchecked); the probe's are ours. The embedded library is
+# checked in its own repo.
+$probe = @(Get-Content (Join-Path $RepoRoot "Tools\PartoutProbe\PartoutProbe.toc") | ForEach-Object { $_.Trim() } |
+    Where-Object { $_ -notmatch "^#" -and $_ -match "[.]lua$" } | ForEach-Object { "Tools\PartoutProbe\$_" })
+& (Join-Path $kit "scripts\run.ps1") -RepoRoot $RepoRoot -Toc "ParsePartout.toc" -Extra $probe -Lua $Lua
 exit $LASTEXITCODE
