@@ -11,12 +11,19 @@
     is $env:LIBGLASS, else ..\LibGlass. (GlassMail's deploy, without a probe.)
 
     Usage:
-        pwsh Tools/deploy.ps1
+        pwsh Tools/deploy.ps1               # Parse Partout
+        pwsh Tools/deploy.ps1 -Probe        # ...and PartoutProbe
+        pwsh Tools/deploy.ps1 -ProbeOnly    # just PartoutProbe
         pwsh Tools/deploy.ps1 -AddOnsPath "D:\...\_forever_\Interface\AddOns"
+
+    PartoutProbe is a ForeverProbe module, so -Probe and -ProbeOnly deploy the
+    ForeverProbe checkout first ($env:FOREVERPROBE, else ..\ForeverProbe).
 #>
 
 param(
-    [string]$AddOnsPath = "C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns"
+    [string]$AddOnsPath = "C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns",
+    [switch]$Probe,
+    [switch]$ProbeOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,6 +32,32 @@ if (-not (Test-Path $AddOnsPath)) { Write-Error "AddOns path not found: $AddOnsP
 
 . (Join-Path $PSScriptRoot "LibGlassPin.ps1")
 $LibGlass = if ($env:LIBGLASS) { $env:LIBGLASS } else { Join-Path (Split-Path -Parent $RepoRoot) "LibGlass" }
+$ForeverProbe = if ($env:FOREVERPROBE) { $env:FOREVERPROBE } else { Join-Path (Split-Path -Parent $RepoRoot) "ForeverProbe" }
+
+function Deploy-Probe {
+    # The host first: PartoutProbe has ## Dependencies: ForeverProbe, so without
+    # it the client loads no PartoutProbe at all.
+    if (-not (Test-Path -LiteralPath (Join-Path $ForeverProbe "Tools\deploy.ps1"))) {
+        Write-Error "ForeverProbe checkout not found at $ForeverProbe (clone github.com/Spotnick2/ForeverProbe there, or set `$env:FOREVERPROBE)"
+        exit 1
+    }
+    & pwsh -NoProfile -File (Join-Path $ForeverProbe "Tools\deploy.ps1") -AddOnsPath $AddOnsPath
+    if ($LASTEXITCODE -ne 0) { Write-Error "ForeverProbe deploy refused; PartoutProbe was not touched"; exit 1 }
+    $dest = Join-Path $AddOnsPath "PartoutProbe"
+    Write-Host "Deploying PartoutProbe -> $dest" -ForegroundColor Cyan
+    New-Item -ItemType Directory -Force -Path $dest | Out-Null
+    Get-ChildItem -LiteralPath (Join-Path $RepoRoot "Tools\PartoutProbe") -File | ForEach-Object {
+        Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $dest $_.Name) -Force
+        Write-Host "  $($_.Name)"
+    }
+}
+
+if ($ProbeOnly) {
+    Deploy-Probe
+    Write-Host ""
+    Write-Host "In game:  /reload, then /fp partout (commands) or /fp steps partout owner" -ForegroundColor Green
+    exit 0
+}
 
 $dest = Join-Path $AddOnsPath "ParsePartout"
 if (-not (Test-Path -LiteralPath (Join-Path $LibGlass "Tools\deploy.ps1"))) {
@@ -69,6 +102,9 @@ Get-ChildItem -LiteralPath $dest -File -Recurse | Where-Object { $_.FullName -no
         }
     }
 
+if ($Probe) { Deploy-Probe }
+
 Write-Host ""
 Write-Host "/reload is enough, a brand-new addon folder included; restart the client only for new textures." -ForegroundColor Yellow
 Write-Host "In game:  /console scriptErrors 1   then   /partout   (/partout aide for the commands)" -ForegroundColor Green
+if ($Probe) { Write-Host "Probe:    /fp partout (commands), /fp steps partout owner (the procedure)" -ForegroundColor Green }

@@ -91,10 +91,11 @@ TOC load order: `Libs\LibGlass-1.0\LibGlass-1.0.xml` → `Compat.lua` → `Local
 
 Anything about the client that can be checked in game is measured, not reasoned, with a probe,
 and **a probe is a ForeverProbe module** (`..\ForeverProbe`, private; read
-`C:\Projects\WoW\References\Docs\PROBES.md` and `..\ForeverProbe\docs\GUIDE.md` first). None
-exists yet; the first one is `Tools\PartoutProbe\` (`## Dependencies: ForeverProbe`,
-`ForeverProbe:Module("PartoutProbe", { api = 1, cmd = "partout" })`), and the deploy script then
-gains `-Probe` / `-ProbeOnly` the way `..\GlassMail\Tools\deploy.ps1` has them.
+`C:\Projects\WoW\References\Docs\PROBES.md` and `..\ForeverProbe\docs\GUIDE.md` first). Ours is
+`Tools\PartoutProbe\` (`/fp partout`, procedures `/fp steps partout owner|officer`), deployed with
+`Tools\deploy.ps1 -Probe` (or `-ProbeOnly`); what it measures and what is still open is
+`docs/FOREVER-PROBE.md`. Its addon messages use the test prefix `ParsePartoutT`, never the
+addon's own.
 - Diagnostic output goes to the `/fp` console and the module's saved log, never to chat.
 - When the owner has to do something in game, write a guided procedure (`Probe:Steps`), not a
   checklist in chat. After their `/reload`, read the SavedVariables yourself (the `probe-reader`
@@ -104,7 +105,14 @@ gains `-Probe` / `-ProbeOnly` the way `..\GlassMail\Tools\deploy.ps1` has them.
 - Results, with the build, go in `docs/FOREVER-PROBE.md`; addon-agnostic ones in the porting
   guide. Check the porting guide and ForeverProbe's facts before measuring again.
 - Probe tests run locally only: ForeverProbe is private, so CI sets `FOREVERPROBE_OPTIONAL=1`
-  and the harness's `loadForeverProbe` skips there (lift it from `..\GlassMail\tests\harness.lua`).
+  and the harness's `loadForeverProbe` skips there (`tests\test_probe.lua`).
+
+## Guild invite requests (#9)
+
+The first feature, in progress: `docs/PLAN.md` is the approved plan (reviewed by Codex to
+consensus), delivered in four PRs (`Part of #9`). Its transport sits on #3's guild-sync base.
+Behaviour references: `C:\Projects\WoW\References\Addons\Guild\` (AutoGuildInvite, EasyGuildInvite:
+All Rights Reserved; WOWForeverGuildInviter: no licence): never copy their code.
 
 ## Toolchain and commands
 
@@ -115,6 +123,7 @@ pwsh tests\run.ps1                                                  # luac -p on
 pwsh tests\run.ps1 -KitDev                                          # the same against the ..\WowTestKit working copy
 & 'C:\Program Files (x86)\Lua\5.1\lua.exe' tests\test_boot.lua     # one test, from the repo root (once run.ps1 has fetched the kit)
 pwsh Tools\deploy.ps1                                               # copy the addon (+ LibGlass) into the _forever_ AddOns folder
+pwsh Tools\deploy.ps1 -Probe                                        # ...and PartoutProbe (+ ForeverProbe)
 ```
 
 - In game: `/console scriptErrors 1` first, then `/reload`.
