@@ -150,6 +150,7 @@ ERR_GUILD_JOIN_S = "%s has joined the guild."
 ERR_GUILD_LEAVE_S = "%s has left the guild."
 ERR_GUILD_INVITE_S = "You have invited %s to join your guild."
 ERR_GUILD_DECLINE_S = "%s declines your guild invitation."
+ERR_GUILD_DECLINE_AUTO_S = "%s has automatically declined your guild invitation." -- not from that probe: Retail's wording, unmeasured on Forever
 
 --------------------------------------------------------------------------------
 -- Chat: addon messages, chat messages, links

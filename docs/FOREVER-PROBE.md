@@ -13,7 +13,13 @@ Deploy it with `pwsh Tools\deploy.ps1 -Probe`, then `/reload` in game:
   `ForeverProbe.lua` (`steps.records["PartoutProbe/<name>"]`), read after a `/reload`.
 
 Addon messages in the probe use the test prefix `ParsePartoutT`, never the addon's own. A
-whisper is logged by shape only (type and length), never its words or its sender.
+whisper is logged by shape only (type and length), never its words or its sender. Other players'
+names (the whisperer, the target, anyone in a guild line) are logged as a label and the name's
+shape, e.g. `the target [2 words]` or `a name [2 words-realm]` (so a realm suffix still shows),
+never spelled out; system lines that match no guild string have those two names replaced. Notes
+are logged and returned by shape, or as `the marker` when they hold the probe's `PartoutProbe`,
+never their text. After an invite, every line is collected for 10 s, then guild lines for 5
+minutes; the join and decline waits end only on that line (their timeout records a FAIL).
 
 ## Still open
 
@@ -40,7 +46,8 @@ click, from a timer, and from a chat link's click (yes/no: received?); an addon 
 
 **officer** (an officer with invite rights, and a non-member who agrees to be invited: a real
 recruit, or someone removed afterwards). `/fp partout target <First Surname>` first. The invite
-from the Invite button (received? then declined: what came back); whisper + invite in one click
+from the Invite button (received? then declined: what came back, including
+`ERR_GUILD_DECLINE_AUTO_S` for a player who blocks guild invites); whisper + invite in one click
 (both received? then accepted: the join line); an invite to someone already in the guild, and to a
 name nobody has (what came back); the notes read, written from a click, read back and restored;
 the guild info text. ForeverProbe is a private developer tool: give the officer the

@@ -15,14 +15,19 @@
 -- Rules (ForeverProbe's guide): lines go to /fp and PartoutProbeDB.log, never
 -- to chat; the only chat lines are deliberate stimuli (the link to click).
 -- Nothing another player wrote is logged: a whisper is logged by shape only,
--- and the name it came from stays in memory for the whisper back. Addon
--- messages use a test prefix of their own, never the addon's.
+-- and the name it came from stays in memory for the whisper back. Other
+-- players' names (the whisperer, the target, anyone in a guild line) are
+-- logged as a label and a shape ("the target [2 words]"), never spelled out;
+-- notes by shape and by whether they hold our marker, never their text.
+-- Addon messages use a test prefix of their own, never the addon's.
 
 local ADDON, NS = ...
 local MAX_LOG = 3000
 local PREFIX = "ParsePartoutT"          -- the test prefix (Parse Partout's dev mode uses it too)
-local COLLECT = 10                       -- seconds of results collected after an attempt
+local COLLECT = 10                       -- seconds: any line after an attempt is collected, and a plain wait ends
+local RECORD = 300                       -- seconds: guild lines are still collected for the attempt (join, decline)
 local NOBODY = "Zzqx Qzzv"               -- a name nobody has, for the "not found" result
+local MARKER = "PartoutProbe"            -- the note text the officer procedure writes
 
 local Probe = ForeverProbe:Module("PartoutProbe", { api = 1, cmd = "partout" })
 local function say(msg) Probe:Say(msg) end
@@ -102,12 +107,13 @@ local function guildPatterns()
     return patterns
 end
 
--- The global a line matches, or nil.
+-- The global a line matches and its captures, or nil.
 local function whichGlobal(text)
     if not plainString(text) then return nil end
     local line = Probe.Plain(text)
     for _, e in ipairs(guildPatterns()) do
-        if line:find(e[2]) then return e[1] end
+        local caps = { line:match(e[2]) }
+        if caps[1] then return e[1], caps end
     end
     return nil
 end
@@ -146,6 +152,40 @@ local function playerName()
     if not ok or not plainString(a) then return nil end
     if a:find(" ") or not plainString(b) or b == "" then return a end
     return a .. " " .. b
+end
+
+local function guildName()
+    local ok, g = Probe:Try("GetGuildInfo", get("GetGuildInfo"), "player")
+    return ok and plainString(g) and g or nil
+end
+
+-- A name's shape, never the name: "2 words", "2 words-realm" (the realm
+-- suffix is a question of its own: does the server stamp one?).
+local function nameShape(name)
+    local base, realm = name:match("^(.-)%-(.+)$")
+    base = base or name
+    local words = select(2, base:gsub("%S+", ""))
+    return words .. (words == 1 and " word" or " words") .. (realm and "-realm" or "")
+end
+
+-- A name as the log may hold it: ours, the guild's and the made-up one as
+-- they are; anyone else as a label (whisperer, target) and the name's shape.
+local function who(name)
+    if name == nil then return "nobody" end
+    if not plainString(name) then return Probe.Shape(name) end
+    if name == NOBODY or name == playerName() or name == guildName() then return show(name) end
+    local base = name:match("^(.-)%-") or name
+    local label = ((base == state.whisperer or name == state.whisperer) and "the whisperer")
+        or ((base == state.target or name == state.target) and "the target") or "a name"
+    return label .. " [" .. nameShape(name) .. "]"
+end
+
+-- A line with the whisperer's and the target's names replaced by labels.
+local function redact(text)
+    for _, e in ipairs({ { state.target, "<target>" }, { state.whisperer, "<whisperer>" } }) do
+        if plainString(e[1]) and e[1] ~= "" then text = (text:gsub(e[1]:gsub("%p", "%%%0"), e[2])) end
+    end
+    return text
 end
 
 local function readState()
@@ -202,7 +242,7 @@ end
 
 local function sendAddon(text, channel, target)
     local ok, res = Probe:Try("SendAddonMessage " .. channel, get("C_ChatInfo.SendAddonMessage"), PREFIX, text, channel, target)
-    say("SendAddonMessage " .. channel .. (target and (" to " .. show(target)) or "") .. " -> " .. show(ok and res))
+    say("SendAddonMessage " .. channel .. (target and (" to " .. who(target)) or "") .. " -> " .. show(ok and res))
     return ok, res
 end
 
@@ -214,7 +254,9 @@ end
 
 local function onAddon(prefix, text, channel, sender)
     if prefix ~= PREFIX or not plainString(text) or not plainString(sender) then return end
-    say("ADDON " .. show(channel) .. " from " .. show(sender) .. ": " .. show(text))
+    -- Only our own PING/PONG is logged as text; anything else on the prefix by shape.
+    local ours = text:match("^PING %d+$") or text:match("^PONG %d+$")
+    say("ADDON " .. show(channel) .. " from " .. who(sender) .. ": " .. (ours and show(text) or Probe.Shape(text)))
     local n = text:match("^PING (%d+)$")
     if n then
         if sender == playerName() then return end   -- our own GUILD echo
@@ -238,23 +280,34 @@ end
 local function whisper(name, text, how)
     if not plainString(name) then say("whisper " .. how .. ": no target"); return false end
     local ok, err = Probe:Try("SendChatMessage WHISPER (" .. how .. ")", sendChat(), text, "WHISPER", nil, name)
-    say("whisper " .. how .. " to " .. show(name) .. " -> " .. (ok and "no error" or show(err)))
+    say("whisper " .. how .. " to " .. who(name) .. " -> " .. (ok and "no error" or show(err)))
     return ok
 end
 
--- Watch what comes back for COLLECT seconds: system lines, UI info/error
--- messages (the host logs ADDON_ACTION_BLOCKED/FORBIDDEN itself).
+-- Watch what comes back: for COLLECT seconds any system line or UI info/error
+-- message, then for RECORD seconds the guild lines (a join or a decline can
+-- take minutes). The host logs ADDON_ACTION_BLOCKED/FORBIDDEN itself.
 local function startAttempt(what, name)
     state.attempt = { what = what, name = name, t = GetTime(), lines = {} }
-    say("ATTEMPT " .. what .. " " .. show(name))
+    say("ATTEMPT " .. what .. " " .. who(name))
 end
 
+-- A guild line is logged as its global and its arguments' labels; any other
+-- line with the whisperer's and the target's names replaced.
 local function note(kind, text)
     local a = state.attempt
-    local g = whichGlobal(text)
-    local line = kind .. (g and (" [" .. g .. "]") or "") .. ": " .. (plainString(text) and show(Probe.Plain(text)) or show(text))
-    if a and GetTime() - a.t <= COLLECT * 3 then
-        a.lines[#a.lines + 1] = string.format("+%.1fs %s", GetTime() - a.t, line)
+    local g, caps = whichGlobal(text)
+    local line
+    if g then
+        local args = {}
+        for i, c in ipairs(caps) do args[i] = who(c) end
+        line = kind .. " [" .. g .. "] " .. table.concat(args, ", ")
+    else
+        line = kind .. ": " .. (plainString(text) and show(redact(Probe.Plain(text))) or show(text))
+    end
+    local age = a and GetTime() - a.t
+    if a and (age <= COLLECT or (g and age <= RECORD)) then
+        a.lines[#a.lines + 1] = string.format("+%.1fs %s", age, line)
         say("RESULT " .. a.what .. " " .. a.lines[#a.lines])
     elseif g then
         say("GUILD LINE " .. line)   -- passive: guild lines seen outside an attempt
@@ -265,42 +318,59 @@ local function invite(name, what)
     if not plainString(name) then say("invite " .. what .. ": no target"); return false end
     startAttempt(what, name)
     local ok, err = Probe:Try("C_GuildInfo.Invite", get("C_GuildInfo.Invite"), name)
-    say("C_GuildInfo.Invite(" .. show(name) .. ") -> " .. (ok and "no error" or show(err)))
+    say("C_GuildInfo.Invite(" .. who(name) .. ") -> " .. (ok and "no error" or show(err)))
     return ok
 end
 
--- A wait-step function: done once COLLECT seconds have passed since the
--- attempt (or `stop(lines)` says so), its result the lines collected.
+-- A wait-step function, its result the lines collected. Without `stop`, done
+-- once COLLECT seconds have passed since the attempt. With `stop`, done only
+-- when `stop(attempt)` holds: the step's timeout records a FAIL otherwise.
 local function collected(stop)
     return function()
         local a = state.attempt
         if not a then return false, "no attempt yet: press Run on the step before" end
         local lines = table.concat(a.lines, " | ")
-        if (stop and stop(a)) or GetTime() - a.t >= COLLECT then return true, #a.lines .. " lines", lines end
+        if stop then
+            if stop(a) then return true, #a.lines .. " lines", lines end
+            return false, #a.lines .. " lines so far"
+        end
+        if GetTime() - a.t >= COLLECT then return true, #a.lines .. " lines", lines end
         return false, string.format("collecting %.0f s", COLLECT - (GetTime() - a.t))
     end
 end
 
+-- A stop condition: a line of a global whose name starts with `name`
+-- (ERR_GUILD_DECLINE takes ERR_GUILD_DECLINE_S and ERR_GUILD_DECLINE_AUTO_S).
 local function sawGlobal(name)
     return function(a)
-        for _, l in ipairs(a.lines) do if l:find("[" .. name .. "]", 1, true) then return true end end
+        for _, l in ipairs(a.lines) do if l:find("[" .. name, 1, true) then return true end end
         return false
     end
 end
 
 -- Notes, by GUID, from the calling click (C_GuildInfo.SetNote has HasRestrictions).
-local saved = {}   -- the target's notes before the test, to put back
+-- A note as the log may hold it: its shape, and whether it is our marker.
+local function noteShape(text)
+    if plainString(text) and text == MARKER then return "the marker" end
+    if plainString(text) and text == "" then return "empty" end
+    return Probe.Shape(text)
+end
+
+local saved = {}   -- the target's notes before the test, to put back (memory only)
+-- Returns ok and a redacted summary, never the row: a step's returns are saved.
 local function readNotes(name)
     local row = rosterRow(name)
-    if not row then say("notes: " .. show(name) .. " not in the roster"); return false end
-    say("notes of " .. show(name) .. ": public " .. show(row.publicNote) .. ", officer " .. show(row.officerNote)
-        .. ", guid " .. Probe.Shape(row.guid))
-    return true, row
+    if not row then say("notes: " .. who(name) .. " not in the roster"); return false end
+    local summary = "public " .. noteShape(row.publicNote) .. ", officer " .. noteShape(row.officerNote)
+        .. ", guid " .. Probe.Shape(row.guid)
+    say("notes of " .. who(name) .. ": " .. summary)
+    return true, summary
 end
 
 local function writeNote(name, isPublic, text)
-    local ok, row = readNotes(name)
-    if not ok then return false end
+    if not readNotes(name) then return false end
+    local row = rosterRow(name)
+    if not row then return false end
     if saved.name ~= name then saved = { name = name, public = row.publicNote, officer = row.officerNote } end
     local okSet, err = Probe:Try("C_GuildInfo.SetNote", get("C_GuildInfo.SetNote"), row.guid, text, isPublic)
     say("SetNote(" .. (isPublic and "public" or "officer") .. ") -> " .. (okSet and "no error" or show(err)))
@@ -361,7 +431,7 @@ Probe:Command("info", function() readInfoText() end, "the guild info text's shap
 Probe:Command("target", function(args)
     local name = (args or ""):match("^%s*(.-)%s*$")
     state.target = name ~= "" and name or nil
-    say("target = " .. show(state.target))
+    say("target = " .. who(state.target))
 end, "<First Surname>: the non-member for the officer procedure")
 Probe:Command("ping", function(args)
     local name = (args or ""):match("^%s*(.-)%s*$")
@@ -376,7 +446,7 @@ Probe:Command("clear", function() Probe:ClearLog(); say("log cleared") end, "emp
 local function pongs(channel)
     return function()
         for _, p in ipairs(state.pongs) do
-            if p.channel == channel and p.n == state.pingN then return true, "pong from " .. p.from .. " on " .. channel end
+            if p.channel == channel and p.n == state.pingN then return true, "pong from " .. who(p.from) .. " on " .. channel end
         end
         return false, "waiting for a pong on " .. channel
     end
@@ -384,7 +454,7 @@ end
 
 Probe:Steps("owner", {
     title = "Owner: guild state, addon messages, whispers from clicks",
-    rev = 1,
+    rev = 2,
     { text = "Log in a character of Parse Partout on this account. Press Read.", button = "Read",
       run = readState, check = function() local f = get("IsInGuild"); return f ~= nil and f() == true, "in a guild" end },
     { text = "The guild strings of this client's language.", auto = true, run = readGlobals },
@@ -426,9 +496,9 @@ Probe:Steps("owner", {
 
 Probe:Steps("officer", {
     title = "Officer: guild invite from a click, results, notes",
-    rev = 1,
+    rev = 2,
     { text = "You need an officer who can invite, and a non-member online who agrees to be invited (a real recruit, or someone you remove after). Type /fp partout target First Surname with their exact name, then Next.",
-      check = function() return state.target ~= nil, show(state.target) end },
+      check = function() return state.target ~= nil, who(state.target) end },
     { text = "Your guild state.", auto = true, run = readState,
       check = function() local f = get("CanGuildInvite"); return f ~= nil and f() == true, "CanGuildInvite" end },
     { text = "The guild strings of this client's language.", auto = true, run = readGlobals },
@@ -436,13 +506,7 @@ Probe:Steps("officer", {
       run = function() return invite(state.target, "plain") end },
     { text = "Collecting what comes back.", wait = collected(), timeout = 60 },
     { text = "Did they get the guild invite window?", ask = true },
-    { text = "Collecting their decline (press Done once they declined).",
-      wait = function()
-          local a = state.attempt
-          if not a then return false, "no attempt" end
-          for _, l in ipairs(a.lines) do if l:find("DECLINE") then return true, l end end
-          return false, #a.lines .. " lines so far"
-      end, timeout = 90 },
+    { text = "Waiting for their decline.", wait = collected(sawGlobal("ERR_GUILD_DECLINE")), timeout = 90 },
     { text = "Press Run: a whisper and the invite, in this one click. Ask them to ACCEPT this time.",
       button = "Whisper + Invite", run = function()
           local w = whisper(state.target, "PartoutProbe : un membre m'a demandé de t'inviter dans la guilde", "click, before invite")
@@ -459,14 +523,15 @@ Probe:Steps("officer", {
     { text = "Collecting.", wait = collected(), timeout = 60 },
     { text = "Press Run: read their notes.", button = "Read notes", run = function() return readNotes(state.target) end },
     { text = "Press Run: write \"PartoutProbe\" in their public note, from this click.", button = "Write public",
-      run = function() return writeNote(state.target, true, "PartoutProbe") end },
+      run = function() return writeNote(state.target, true, MARKER) end },
     { text = "Press Run: write \"PartoutProbe\" in their officer note, from this click.", button = "Write officer",
-      run = function() return writeNote(state.target, false, "PartoutProbe") end },
+      run = function() return writeNote(state.target, false, MARKER) end },
     { text = "Wait a few seconds, then press Run: read the notes back.", button = "Read back",
       run = function() return readNotes(state.target) end,
       check = function()
           local row = rosterRow(state.target)
-          return row ~= nil and row.publicNote == "PartoutProbe", row and show(row.publicNote)
+          return row ~= nil and row.publicNote == MARKER,
+              row and ("public " .. noteShape(row.publicNote) .. ", officer " .. noteShape(row.officerNote))
       end },
     { text = "Press Run: put their notes back as they were.", button = "Restore", run = function()
           if saved.name ~= state.target then return false, "nothing saved" end
@@ -480,4 +545,4 @@ Probe:Steps("officer", {
 
 NS._test = { Probe = Probe, state = state, toPattern = toPattern, whichGlobal = whichGlobal, PREFIX = PREFIX,
     invite = invite, whisper = whisper, readNotes = readNotes, writeNote = writeNote, readInfoText = readInfoText,
-    collected = collected, ping = ping }
+    collected = collected, sawGlobal = sawGlobal, ping = ping }

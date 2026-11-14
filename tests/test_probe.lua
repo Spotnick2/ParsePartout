@@ -39,7 +39,7 @@ check(log:find("own roster row: rankIndex 3", 1, true), "state finds the player'
 SlashCmdList.FOREVERPROBE("partout globals")
 log = newLog()
 check(log:find('ERR_GUILD_JOIN_S = "%s has joined the guild."', 1, true), "globals lists the join string")
-check(log:find("4 guild-related globals", 1, true), "  and counts them")
+check(log:find("5 guild-related globals", 1, true), "  and counts them")
 
 -- Patterns: names with a surname, positional specifiers.
 check(("Bob Smith has joined the guild."):find(P.toPattern(ERR_GUILD_JOIN_S)), "the join pattern takes a two-word name")
@@ -88,7 +88,21 @@ check(P.state.linkResult and P.state.linkResult.ok, "  and records it")
 WoW.clickLink("addon:other:thing")
 eq(#WoW.sentChat, 1, "another addon's link does nothing")
 
+-- The whole reply flow keeps the whisperer's name out of the log (Codex P2 on #10).
+P.whisper(P.state.whisperer, "x", "click")
+P.ping(P.state.whisperer)
+eq(WoW.addonSent[#WoW.addonSent].target, "Zed Outsider", "the addon whisper goes to the whisperer's name")
+WoW.fire("CHAT_MSG_ADDON", "ParsePartoutT", "PONG " .. P.state.pingN, "WHISPER", "Zed Outsider", "Aline Dubois", 0, 0, "", 0)
+WoW.fire("CHAT_MSG_ADDON", "ParsePartoutT", "Zed's own words", "WHISPER", "Zed Outsider", "Aline Dubois", 0, 0, "", 0)
+log = newLog()
+check(not log:find("Zed", 1, true), "replies, pings and pongs never log the whisperer's name")
+check(log:find("whisper link click to the whisperer [2 words]", 1, true), "  but a label and its shape")
+check(log:find("to the whisperer [2 words] -> ", 1, true), "  for the addon whisper too")
+check(log:find("from the whisperer [2 words]: str", 1, true), "  and another message on the prefix by shape")
+
 -- The invite: recorded, then what comes back collected and named.
+newLog()
+P.state.whisperer, P.state.target = nil, "Zed Outsider"
 P.invite("Zed Outsider", "plain")
 eq(WoW.invites[1], "Zed Outsider", "invite calls C_GuildInfo.Invite with the name verbatim")
 WoW.fire("CHAT_MSG_SYSTEM", "You have invited Zed Outsider to join your guild.")
@@ -100,6 +114,43 @@ local finished = P.collected()
 check(not finished(), "the collection waits")
 WoW.advance(11)
 check(finished(), "  and ends after its window")
+WoW.fire("CHAT_MSG_SYSTEM", "Bob Smith has left the guild.")
+eq(#a.lines, 3, "a guild line is still collected after the window")
+WoW.fire("CHAT_MSG_SYSTEM", "Bob Smith has come online.")
+eq(#a.lines, 3, "  any other line is not")
+log = newLog()
+check(not log:find("Zed", 1, true) and not log:find("Bob", 1, true), "the target's and others' names are never logged")
+check(log:find("[ERR_GUILD_INVITE_S] the target [2 words]", 1, true), "  the target by label and shape")
+check(log:find("[ERR_GUILD_LEAVE_S] a name [2 words]", 1, true), "  anyone else by shape")
+
+-- A wait for the join completes on the join line only, however late (Codex P2 on #10).
+P.invite("Zed Outsider", "whisper+invite")
+local joined = P.collected(P.sawGlobal("ERR_GUILD_JOIN_S"))
+WoW.advance(11)
+check(not joined(), "the join wait doesn't end after the collection window")
+WoW.advance(60)
+check(not joined(), "  nor after a minute without a join")
+WoW.fire("CHAT_MSG_SYSTEM", "Zed Outsider has joined the guild.")
+check(joined(), "  but on the join line, 71 s after the invite")
+WoW.fire("CHAT_MSG_SYSTEM", "Zed Outsider-Realm has joined the guild.")
+check(newLog():find("the target [2 words-realm]", 1, true), "a realm-stamped name logs as such")
+P.invite("Zed Outsider", "plain")
+local declined = P.collected(P.sawGlobal("ERR_GUILD_DECLINE"))
+WoW.fire("CHAT_MSG_SYSTEM", "Zed Outsider has automatically declined your guild invitation.")
+check(declined(), "the decline wait takes the automatic decline")
+P.state.target = nil
+
+-- Notes: shapes and the marker, never their text, in the log or the step result (Codex P2 on #10).
+newLog()
+local okN, summary = P.readNotes("Carl Martin")
+check(okN, "notes are read from the roster")
+eq(type(summary), "string", "  their result is a summary, not the roster row")
+log = newLog() .. summary
+check(not log:find("Tank", 1, true) and not log:find("Officier", 1, true), "  never the notes' text")
+check(summary:find("public str", 1, true), "  but their shape")
+WoW.guild.members[2].note = "PartoutProbe"
+check(select(2, P.readNotes("Carl Martin")):find("public the marker", 1, true), "our marker is named as such")
+WoW.guild.members[2].note = "Tank"
 
 -- Notes, by GUID, from roster rows.
 P.writeNote("Carl Martin", true, "PartoutProbe")
