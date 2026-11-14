@@ -25,8 +25,9 @@ promotion, sync limits and dominance, best-effort corrections), round 5 **APPROV
 ### What the design rests on (build 1.60.1.70790 unless noted)
 - **Restricted calls, assumed click-only (unmeasured by us).** A guild addon in production on
   Forever (2026-11-05) calls `C_GuildInfo.Invite` and `SendChatMessage` only from a player's click
-  (invites, whispers, guild actions). EGI 0.2.5 (beta, ARR) claims invites fail
-  even from clicks. Blizzard's annotations: `Invite` has `SecretArguments = AllowedWhenUntainted`,
+  (invites, whispers, guild actions). EGI 0.2.11-forever-beta (ARR) claims invites
+  fail even from clicks ("hardware-event callbacks", 70790); the production addon still invites
+  from a click at 2026-11-14. Blizzard's annotations: `Invite` has `SecretArguments = AllowedWhenUntainted`,
   no `HasRestrictions` (GuildInfoDocumentation.lua:170); `SendChatMessage` has `HasRestrictions` +
   `RestrictedForMacroChatMessages` (ChatInfoDocumentation.lua:564); `SetNote` and `GetInfoText`
   have `HasRestrictions` (:389, :107). So: every restricted call runs synchronously inside our own
@@ -53,8 +54,8 @@ promotion, sync limits and dominance, best-effort corrections), round 5 **APPROV
 - Comm: **not LibAccountSync** (own accounts only, its README :3-5). GUILD addon messages in
   GuildSpy's shape (pure core with injected send/clock/timer; Wire escaping; tests with several
   cores on a fake network, GuildSpy `tests/test_guildsync.lua`), 1.2 s/send pacing as used in production.
-- References (`C:\Projects\WoW\References\Addons\Guild\`): AutoGuildInvite 4.6.0, EasyGuildInvite
-  0.2.5 (All Rights Reserved) and WOWForeverGuildInviter 1.1.0 (no licence): behaviour only, never
+- References (`C:\Projects\WoW\References\Addons\Guild\`): AutoGuildInvite 4.6.1, EasyGuildInvite
+  0.2.11-forever-beta (All Rights Reserved) and WOWForeverGuildInviter 1.1.0 (no licence): behaviour only, never
   copied.
 
 ## Design
